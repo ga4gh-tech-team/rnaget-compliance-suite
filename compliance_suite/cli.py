@@ -76,6 +76,7 @@ def main():
 @click.option('--output_dir', '-o', default='rnaget-compliance-results', 
               help='path to output results/web archive directory')
 @click.option('--serve', is_flag=True, help='spin up a server')
+@click.option('--submit', is_flag=True, help='submit JSON report to testbed API')
 @click.option('--uptime', '-u', default='3600',
               help='time that server will remain up in seconds')
 @click.option('--no-tar', is_flag=True, help='skip the creation of a tarball')
@@ -83,7 +84,7 @@ def main():
               help="force overwrite of output directory")
 @click.option('--pretty', '-p', is_flag=True, help="choose to output json as pretty/formatted version")
 
-def report(user_config, output_dir, serve, uptime, no_tar, force, pretty):
+def report(user_config, output_dir, submit, serve, uptime, no_tar, force, pretty):
     """Program entrypoint. Executes compliance tests and generates report
 
     This method parses the CLI command 'report' to execute the report session
@@ -94,6 +95,7 @@ def report(user_config, output_dir, serve, uptime, no_tar, force, pretty):
         user_config (str): Required. Path to user config YAML file
         output_dir (str): Optional. Path to output directory
         serve (bool): Optional. If true, spin up a server
+        submit (bool): Optional. If true, submit JSON report to testbed API
         uptime (int): Optional. How long report server remains up in seconds
         no_tar (bool): Optional. If true, do not create .tar.gz of output dir
         force (bool): Optional. If true, overwrite output dir if it exists 
@@ -185,6 +187,15 @@ def report(user_config, output_dir, serve, uptime, no_tar, force, pretty):
         # start server if user specified --serve and -r 
         server = ReportServer(output_dir)
         server.render_html()
+        
+        if submit:
+            print("Attempting to submit to testbed API...")
+            response = ReportSubmitter.submit_report(submit_id, submit_token, ga4gh_report, url=submit_url)
+            if response["status_code"] == 200:
+                print("The submission was successful, the report ID is " + response["report_id"])
+            else:
+                print("The submission failed with a status code of " + str(response["status_code"]))
+                print("Error Message: " + str(response["error_message"]))
 
         if serve is True:
             logging.info("serving results as HTML report from output " 
