@@ -29,6 +29,7 @@ from compliance_suite.exceptions.user_config_exception import \
 from compliance_suite.config.tests import TESTS_BY_OBJECT_TYPE
 
 from ga4gh.testbed.report.report import Report
+from ga4gh.testbed.submit.report_submitter import ReportSubmitter
 
 def scan_for_errors(json):
     """generate high-level summaries from available results data structure
@@ -76,15 +77,18 @@ def main():
 @click.option('--output_dir', '-o', default='rnaget-compliance-results', 
               help='path to output results/web archive directory')
 @click.option('--serve', is_flag=True, help='spin up a server')
-@click.option('--submit', is_flag=True, help='submit JSON report to testbed API')
 @click.option('--uptime', '-u', default='3600',
               help='time that server will remain up in seconds')
 @click.option('--no-tar', is_flag=True, help='skip the creation of a tarball')
 @click.option('--force', '-f', is_flag=True, 
               help="force overwrite of output directory")
 @click.option('--pretty', '-p', is_flag=True, help="choose to output json as pretty/formatted version")
+@click.option('--submit', is_flag=True, help='submit JSON report to testbed API')
+@click.option('--submit-id', help='report series ID')  
+@click.option('--submit-token', help='report series token') 
+@click.option('--submit-url', default="http://localhost:4500/reports", help='testbed API submission endpoint')
 
-def report(user_config, output_dir, submit, serve, uptime, no_tar, force, pretty):
+def report(user_config, output_dir, serve, uptime, no_tar, force, pretty, submit, submit_id, submit_token, submit_url):
     """Program entrypoint. Executes compliance tests and generates report
 
     This method parses the CLI command 'report' to execute the report session
@@ -95,10 +99,10 @@ def report(user_config, output_dir, submit, serve, uptime, no_tar, force, pretty
         user_config (str): Required. Path to user config YAML file
         output_dir (str): Optional. Path to output directory
         serve (bool): Optional. If true, spin up a server
-        submit (bool): Optional. If true, submit JSON report to testbed API
         uptime (int): Optional. How long report server remains up in seconds
         no_tar (bool): Optional. If true, do not create .tar.gz of output dir
         force (bool): Optional. If true, overwrite output dir if it exists 
+        submit (bool): Optional. If true, submit JSON report to testbed API
     """
 
     logging.basicConfig(format="%(message)s", level=logging.INFO)
@@ -183,20 +187,25 @@ def report(user_config, output_dir, submit, serve, uptime, no_tar, force, pretty
                 tar.add(output_dir, arcname=os.path.basename(output_dirname))
             logging.info("gzipped tarball of results directory available "
                          + "at " + output_dir + ".tar.gz")
-
-        # start server if user specified --serve and -r 
-        server = ReportServer(output_dir)
-        server.render_html()
-        
+            
+        # ga4gh testbed report submitter 
         if submit:
             print("Attempting to submit to testbed API...")
-            response = ReportSubmitter.submit_report(submit_id, submit_token, ga4gh_report, url=submit_url)
+            if submit_id == None: 
+                raise Exception('Submit requested but no submit ID is provided')
+            if submit_token == None:
+                raise Exception('Submit requested but no submit token is provided')
+            response = ReportSubmitter.submit_report(submit_id, submit_token, final_report, url=submit_url)
             if response["status_code"] == 200:
                 print("The submission was successful, the report ID is " + response["report_id"])
             else:
                 print("The submission failed with a status code of " + str(response["status_code"]))
                 print("Error Message: " + str(response["error_message"]))
 
+        # start server if user specified --serve and -r 
+        server = ReportServer(output_dir)
+        server.render_html()
+        
         if serve is True:
             logging.info("serving results as HTML report from output " 
                         + "directory " + output_dir)
